@@ -327,6 +327,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				double ProbConstLTP = sqrt((param->alpha1 / (pow(2, t/10)) * maxNumLevelLTP) / (param->StreamLength * (param->maxWeight - param->minWeight)));
 				double ProbConstLTD = sqrt((param->alpha1 / (pow(2, t/10)) * maxNumLevelLTD) / (param->StreamLength * (param->maxWeight - param->minWeight)));
 
+				double C = sqrt((param->alpha1 / (pow(2, t/10))) / (param->StreamLength * 0.001));
+
 				int **pulse = new int *[param->nInput];
 				#pragma omp parallel for
 				for (int n = 0; n < param->nInput; n++) {
@@ -356,8 +358,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					for (int n = 0; n < param->nInput; n++) {
 						InputPulseTrain[n] = new bool [2 * param->StreamLength];
 
-						double iLTP = fabs(Input[i][n] * ProbConstLTP);
-						double iLTD = fabs(Input[i][n] * ProbConstLTD);
+						double iLTP = fabs(Input[i][n] * C);
+						double iLTD = fabs(Input[i][n] * C);
 						std::bernoulli_distribution disLTP(iLTP);
 						std::bernoulli_distribution disLTD(iLTD);
 						for (int t = 0; t < param->StreamLength; t++) {
@@ -382,8 +384,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					for (int n = 0; n < param->nHide; n++) {
 						DeltaPulseTrain[n] = new bool [2 * param->StreamLength];
 
-						double dLTP = fabs(s1[n] * ProbConstLTP);
-						double dLTD = fabs(s1[n] * ProbConstLTD);
+						double dLTP = fabs(s1[n] * C);
+						double dLTD = fabs(s1[n] * C);
 						std::bernoulli_distribution disLTP(dLTP);
 						std::bernoulli_distribution disLTD(dLTD);
 						for (int t = 0; t < param->StreamLength; t++) {
@@ -681,6 +683,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				int maxNumLevelLTD = 100;
 				double ProbConstLTP = sqrt((param->alpha2 / (pow(2, t/10)) * maxNumLevelLTP) / (param->StreamLength * (param->maxWeight - param->minWeight)));
 				double ProbConstLTD = sqrt((param->alpha2 / (pow(2, t/10)) * maxNumLevelLTD) / (param->StreamLength * (param->maxWeight - param->minWeight)));
+				
+				double C = sqrt((param->alpha1 / (pow(2, t/10))) / (param->StreamLength * 0.001));
 
 				int **pulse = new int *[param->nHide];
 				#pragma omp parallel for
@@ -712,8 +716,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					for (int n = 0; n < param->nHide; n++) {
 						InputPulseTrain[n] = new bool [2 * param->StreamLength];
 
-						double iLTP = fabs(a1[n] * ProbConstLTP);
-						double iLTD = fabs(a1[n] * ProbConstLTD);
+						double iLTP = fabs(a1[n] * C);
+						double iLTD = fabs(a1[n] * C);
 						std::bernoulli_distribution disLTP(iLTP);
 						std::bernoulli_distribution disLTD(iLTD);
 						for (int t = 0; t < param->StreamLength; t++) {
@@ -738,8 +742,8 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					for (int n = 0; n < param->nOutput; n++) {
 						DeltaPulseTrain[n] = new bool [2 * param->StreamLength];
 
-						double dLTP = fabs(s2[n] * ProbConstLTP);
-						double dLTD = fabs(s2[n] * ProbConstLTD);
+						double dLTP = fabs(s2[n] * C);
+						double dLTD = fabs(s2[n] * C);
 						std::bernoulli_distribution disLTP(dLTP);
 						std::bernoulli_distribution disLTD(dLTD);
 						for (int t = 0; t < param->StreamLength; t++) {
