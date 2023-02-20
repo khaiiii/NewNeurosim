@@ -105,6 +105,11 @@ void WeightTransfer(void);
 void TransferEnergyLatencyCalculation(Array* array, SubArray* subArray);
 
 void Train(const int numTrain, const int epochs, char *optimization_type) {
+
+/* gerate random number */
+std::random_device rd;
+std::mt19937_64 gen(rd());
+
 int numBatchReadSynapse;	    // # of read synapses in a batch read operation (decide later)
 int numBatchWriteSynapse;	// # of write synapses in a batch write operation (decide later)
 double outN1[param->nHide]; // Net input to the hidden layer [param->nHide]
@@ -353,7 +358,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				}
 
 				/* original code */
-				bool **InputPulseStream = new bool *[param->nInput];
+				bool **InputPulseTrain = new bool *[param->nInput];
 				bool *InputisPositive = new bool [param->nInput];
 				
 				/* Input is Positive? or not */
@@ -363,20 +368,75 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 							InputisPositive[n] = true;
 					}
 				
-				bool **HiddenPulseStream = new bool *[param->nHide];
-				bool *HiddenisPositive = new bool [param->nHide];
+				/* generate Input pulse Train */
+				#pragma omp parallel for collapse(2)
+					for (int n = 0; n < param->nInput; n++) {
+						InputPulseTrain[n] = new bool [2 * param->StreamLength];
 
-				/* Hidden is Positive? or not */
+						double iLTP = fabs(Input[i][n] * ProbConstLTP);
+						double iLTD = fabs(Input[i][n] * ProbConstLTD);
+						std::bernoulli_distribution disLTP(iLTP);
+						std::bernoulli_distribution disLTD(iLTD);
+						for (int t = 0; t < param->StreamLength; t++) {
+							InputPulseTrain[n][t] = disLTP(gen);
+							InputPulseTrain[n][t + param->StreamLength] = disLTD(gen);
+						}
+					}
+				
+				bool **DeltaPulseTrain = new bool *[param->nHide];
+				bool *DeltaisPositive = new bool [param->nHide];
+
+				/* Delta is Positive? or not */
 				#pragma omp parallel for
 					for (int n = 0; n < param->nHide; n++) {
 						if (s1[n] > 0)
-							HiddenisPositive[n] = true;
+							DeltaisPositive[n] = true;
 					}
 				
+				/* generate Delta pulse train */
 				#pragma omp parallel for collapse(2)
-					for(int m = 0; )
+					for (int n = 0; n < param->nHide; n++) {
+						DeltaPulseTrain[n] = new bool [2 * param->StreamLength];
 
+						double dLTP = fabs(s1[n] * ProbConstLTP);
+						double dLTD = fabs(s1[n] * ProbConstLTD);
+						std::bernoulli_distribution disLTP(dLTP);
+						std::bernoulli_distribution disLTD(dLTD);
+						for (int t = 0; t < param->StreamLength; t++) {
+							DeltaPulseTrain[n][t] = disLTP(gen);
+							DeltaPulseTrain[n][t + param->StreamLength] = disLTD(gen);
+						}
+					}
+				
+				/* generate pulse for WU */
+				#pragma omp parallel for collapse(3)
+					for (int t = 0; t < param->StreamLength; t++) {
+						for (int n = 0; n < param->nInput; n++) {
+							for (int m = 0; m < param->nHide; m++) {
+								if (InputisPositive[n] ^ DeltaisPositive[m]) { // for LTP
+									if (InputPulseTrain[n][t] & DeltaPulseTrain[m][t])
+										pulse[n][m]++;
+								}
+								else { // for LTD
+									if (InputPulseTrain[n][t + param->StreamLength] & DeltaPulseTrain[m][t + param->StreamLength])
+										pulse[n][m]--;
+								}
+							}
+						}
+					}
 
+				#pragma omp parallel for
+					for (int n = 0; n < param->nInput; n++) 
+						delete[] InputPulseTrain[n];
+					delete[] InputPulseTrain;
+					delete[] InputisPositive;
+				
+				#pragma omp parallel for
+					for (int n = 0; n < param->nHide; n++)
+						delete[] DeltaPulseTrain[n];
+					delete[] DeltaPulseTrain;
+					delete[] DeltaisPositive;
+				
 				#pragma omp parallel for reduction(+: sumArrayWriteEnergy, sumNeuroSimWriteEnergy, sumWriteLatencyAnalogNVM)
 				for (int k = 0; k < param->nInput; k++) {
 					int numWriteOperationPerRow = 0;	// Number of write batches in a row that have any weight change

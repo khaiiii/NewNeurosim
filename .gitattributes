@@ -3,3 +3,4 @@ label60000_train.txt filter=lfs diff=lfs merge=lfs -text
 patch10000_test.txt filter=lfs diff=lfs merge=lfs -text
 patch60000_test.txt filter=lfs diff=lfs merge=lfs -text
 patch60000_train.txt filter=lfs diff=lfs merge=lfs -text
+*.txt filter=lfs diff=lfs merge=lfs -text
