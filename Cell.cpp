@@ -519,7 +519,6 @@ void RealDevice::WriteWithNum(int numpulse, double weight, double minWeight, dou
 }
 void RealDevice::WriteWithNumtest(int numpulse, double weight, double minWeight, double maxWeight) {
 	double conductanceNew = conductance + numpulse * 0.0000000001;
-	printf("%d ", numpulse);
 
 	/* Cycle-to-cycle variation */
 	extern std::mt19937 gen;
