@@ -127,9 +127,6 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 
 	
 	for (int t = 0; t < epochs; t++) {
-
-		param->alpha1 = param->alpha1 / pow(2, (t/10));
-		param->alpha2 = param->alpha2 / pow(2, (t/10));
 		for (int batchSize = 0; batchSize < numTrain; batchSize++) {
 			int i = rand() % param->numMnistTrainImages;  // Randomize sample
 			/* First layer (input layer to the hidden layer) */
@@ -147,14 +144,6 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				 readPulseWidth = static_cast<eNVM*>(arrayIH->cell[0][0])->readPulseWidth;
            }
 
-			/* Digitalize Input */
-			int *digitalout;
-			digitalout = new int[param->nInput];
-			#pragma omp parallel for
-				for (int j = 0; j < param->nInput; j++) {
-					digitalout[j] = static_cast<int>(Input[i][j] * 255 / 256 * param->numInputLevel);
-				}
-
             #pragma omp parallel for reduction(+: sumArrayReadEnergy)
 				for (int j=0; j<param->nHide; j++) {
 					if (AnalogNVM *temp = dynamic_cast<AnalogNVM*>(arrayIH->cell[0][0])) {  // Analog eNVM
@@ -171,7 +160,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                             double IsumMin = 0; 
 							double inputSum = 0;    // Weighted sum current of input vector * weight=1 column
 							for (int k=0; k<param->nInput; k++) {
-								if ((digitalout[k]>>n) & 1) {    // if the nth bit of dInput[i][k] is 1
+								if ((dInput[i][k]>>n) & 1) {    // if the nth bit of dInput[i][k] is 1
 									Isum += arrayIH->ReadCell(j,k);
                                     inputSum += arrayIH->GetMediumCellReadCurrent(j,k);    // get current of Dummy Column as reference
 									sumArrayReadEnergy += arrayIH->wireCapRow * readVoltage * readVoltage; // Selected BLs (1T1R) or Selected WLs (cross-point)
@@ -197,7 +186,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					int numActiveRows = 0;  // Number of selected rows for NeuroSim
 					for (int n=0; n<param->numBitInput; n++) {
 						for (int k=0; k<param->nInput; k++) {
-							if ((digitalout[k]>>n) & 1) {    // if the nth bit of dInput[i][k] is 1
+							if ((dInput[i][k]>>n) & 1) {    // if the nth bit of dInput[i][k] is 1
 								numActiveRows++;
 							}
 						}
@@ -208,8 +197,6 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					subArrayIH->readLatency += NeuroSimSubArrayReadLatency(subArrayIH);
 					subArrayIH->readLatency += NeuroSimNeuronReadLatency(subArrayIH, adderIH, muxIH, muxDecoderIH, dffIH, subtractorIH);
 				}
-
-				delete[] digitalout;
 
 
         } 
@@ -235,15 +222,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
             if(AnalogNVM *temp = dynamic_cast<AnalogNVM*>(arrayHO->cell[0][0])){
                 readVoltage = static_cast<eNVM*>(arrayHO->cell[0][0])->readVoltage;
 				readPulseWidth = static_cast<eNVM*>(arrayHO->cell[0][0])->readPulseWidth;
-            }
-
-			/* Digitalize Input */
-			int *digitalout;
-			digitalout = new int[param->nInput];
-			#pragma omp parallel for
-				for (int j = 0; j < param->nHide; j++) {
-					digitalout[j] = static_cast<int>(a1[j] * 255 / 256 * param->numInputLevel);
-				}			
+            }		
 
                 #pragma omp parallel for reduction(+: sumArrayReadEnergy)
 				for (int j=0; j<param->nOutput; j++) {
@@ -261,7 +240,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                             double IsumMin = 0; 
 							double a1Sum = 0;    // Weighted sum current of input vector * weight=1 column                            
 							for (int k=0; k<param->nHide; k++) {
-								if ((digitalout[k]>>n) & 1) {    // numbit is 8 
+								if ((da1[k]>>n) & 1) {    // numbit is 8 
 							 		Isum += arrayHO->ReadCell(j,k);
                                     a1Sum +=arrayHO->GetMediumCellReadCurrent(j,k);
                                     sumArrayReadEnergy += arrayHO->wireCapRow * readVoltage * readVoltage; // Selected BLs (1T1R) or Selected WLs (cross-point)								                                  
@@ -284,7 +263,7 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					int numActiveRows = 0;  // Number of selected rows for NeuroSim
 					for (int n=0; n<param->numBitInput; n++) {
 						for (int k=0; k<param->nHide; k++) {
-							if ((digitalout[k]>>n) & 1) {    // if the nth bit of da1[k] is 1
+							if ((da1[k]>>n) & 1) {    // if the nth bit of da1[k] is 1
 								numActiveRows++;
 							}
 						}
@@ -295,8 +274,6 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					subArrayHO->readLatency += NeuroSimSubArrayReadLatency(subArrayHO);
 					subArrayHO->readLatency += NeuroSimNeuronReadLatency(subArrayHO, adderHO, muxHO, muxDecoderHO, dffHO, subtractorHO);
 				}
-
-				delete[] digitalout;
 
 			} else {
 				#pragma omp parallel for
@@ -347,29 +324,35 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				/* Stochastic pulse WU */
 				int maxNumLevelLTP = 97;
 				int maxNumLevelLTD = 100;
-				double ProbConstLTP = sqrt((param->alpha1 * maxNumLevelLTP) / param->StreamLength * (param->maxWeight - param->minWeight));
-				double ProbConstLTD = sqrt((param->alpha1 * maxNumLevelLTD) / param->StreamLength * (param->maxWeight - param->minWeight));
+				double ProbConstLTP = sqrt((param->alpha1 / (pow(2, t/10)) * maxNumLevelLTP) / (param->StreamLength * (param->maxWeight - param->minWeight)));
+				double ProbConstLTD = sqrt((param->alpha1 / (pow(2, t/10)) * maxNumLevelLTD) / (param->StreamLength * (param->maxWeight - param->minWeight)));
 
 				int **pulse = new int *[param->nInput];
 				#pragma omp parallel for
-				for (int n = 0; n < param->nInput; n++)
-				{
+				for (int n = 0; n < param->nInput; n++) {
 					pulse[n] = new int[param->nHide];
 				}
 
-				/* original code */
+				#pragma omp parallel for collapse(2)
+				for (int n = 0; n < param->nInput; n++) {
+					for (int m = 0; m < param->nHide; m++) {
+						pulse[n][m] = 0;
+					}
+				}
+
 				bool **InputPulseTrain = new bool *[param->nInput];
-				bool *InputisPositive = new bool [param->nInput];
+				//bool *InputisPositive = new bool [param->nInput];
+				bool InputisPositive[param->nInput] = {};
 				
 				/* Input is Positive? or not */
 				#pragma omp parallel for
 					for (int n = 0; n < param->nInput; n++) {
 						if (Input[i][n] > 0)
-							InputisPositive[n] = true;
+							InputisPositive[n] = 1;
 					}
 				
 				/* generate Input pulse Train */
-				#pragma omp parallel for collapse(2)
+				#pragma omp parallel for
 					for (int n = 0; n < param->nInput; n++) {
 						InputPulseTrain[n] = new bool [2 * param->StreamLength];
 
@@ -384,17 +367,18 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 					}
 				
 				bool **DeltaPulseTrain = new bool *[param->nHide];
-				bool *DeltaisPositive = new bool [param->nHide];
+				//bool *DeltaisPositive = new bool [param->nHide];
+				bool DeltaisPositive[param->nHide] = {};
 
 				/* Delta is Positive? or not */
 				#pragma omp parallel for
 					for (int n = 0; n < param->nHide; n++) {
 						if (s1[n] > 0)
-							DeltaisPositive[n] = true;
+							DeltaisPositive[n] = 1;
 					}
 				
 				/* generate Delta pulse train */
-				#pragma omp parallel for collapse(2)
+				#pragma omp parallel for
 					for (int n = 0; n < param->nHide; n++) {
 						DeltaPulseTrain[n] = new bool [2 * param->StreamLength];
 
@@ -424,18 +408,18 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 							}
 						}
 					}
-
+		
 				#pragma omp parallel for
 					for (int n = 0; n < param->nInput; n++) 
 						delete[] InputPulseTrain[n];
 					delete[] InputPulseTrain;
-					delete[] InputisPositive;
+					//delete[] InputisPositive;
 				
 				#pragma omp parallel for
 					for (int n = 0; n < param->nHide; n++)
 						delete[] DeltaPulseTrain[n];
 					delete[] DeltaPulseTrain;
-					delete[] DeltaisPositive;
+					//delete[] DeltaisPositive;
 				
 				#pragma omp parallel for reduction(+: sumArrayWriteEnergy, sumNeuroSimWriteEnergy, sumWriteLatencyAnalogNVM)
 				for (int k = 0; k < param->nInput; k++) {
@@ -508,7 +492,12 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                             
                             if(optimization_type == "SGD" || (batchSize+1) % train_batchsize == 0 ){
                                 if (AnalogNVM *temp = dynamic_cast<AnalogNVM*>(arrayIH->cell[jj][k])) {	// Analog eNVM
-                                    arrayIH->WriteCell(jj, k, deltaWeight1[jj][k], weight1[jj][k], param->maxWeight, param->minWeight, true);
+                                    //arrayIH->WriteCell(jj, k, deltaWeight1[jj][k], weight1[jj][k], param->maxWeight, param->minWeight, true);
+
+									//arrayIH->WirteCellWithNum(jj, k, pulse[k][jj], weight1[jj][k], param->maxWeight, param->minWeight);
+
+									arrayIH->WriteCelltest(jj, k, pulse[k][jj], weight1[jj][k], param->maxWeight, param->minWeight);
+
                                     weight1[jj][k] = arrayIH->ConductanceToWeight(jj, k, param->maxWeight, param->minWeight); 
                                     weightChangeBatch = weightChangeBatch || static_cast<AnalogNVM*>(arrayIH->cell[jj][k])->numPulse;
                                     if(fabs(static_cast<AnalogNVM*>(arrayIH->cell[jj][k])->numPulse) > maxPulseNum)
@@ -521,25 +510,6 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                                     if (static_cast<AnalogNVM*>(arrayIH->cell[jj][k])->writeLatencyLTD > maxLatencyLTD)
                                         maxLatencyLTD = static_cast<AnalogNVM*>(arrayIH->cell[jj][k])->writeLatencyLTD;
                                 }							
-                                else if (HybridCell *temp = dynamic_cast<HybridCell*>(arrayIH->cell[jj][k])) {	// Analog eNVM
-                                    arrayIH->WriteCell(jj, k, deltaWeight1[jj][k], weight1[jj][k], param->maxWeight, param->minWeight, true);
-                                    weight1[jj][k] = arrayIH->ConductanceToWeight(jj, k, param->maxWeight, param->minWeight);
-                                    weightChangeBatch = weightChangeBatch || static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.numPulse;
-                                    if(fabs(static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.numPulse) > maxPulseNum)
-                                    {
-                                        maxPulseNum=fabs(static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.numPulse);
-                                    }
-                                    /* Get maxLatencyLTP and maxLatencyLTD */
-                                    if (static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.writeLatencyLTP > maxLatencyLTP)
-                                        maxLatencyLTP = static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.writeLatencyLTP;
-                                    if (static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.writeLatencyLTD > maxLatencyLTD)
-                                        maxLatencyLTD = static_cast<HybridCell*>(arrayIH->cell[jj][k])->LSBcell.writeLatencyLTD;
-                                } 
-                                else {	// SRAM and digital eNVM
-                                    weight1[jj][k] = weight1[jj][k] + deltaWeight1[jj][k];
-                                    arrayIH->WriteCell(jj, k, deltaWeight1[jj][k], weight1[jj][k], param->maxWeight, param->minWeight, true);
-                                    weightChangeBatch = weightChangeBatch || arrayIH->weightChange[jj][k];
-                                }
                             }
 							
 						}
@@ -705,6 +675,108 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                 }
                 
 				numBatchWriteSynapse = (int)ceil((double)arrayHO->arrayColSize / param->numWriteColMuxed);
+
+				/* Stochastic pulse WU */
+				int maxNumLevelLTP = 97;
+				int maxNumLevelLTD = 100;
+				double ProbConstLTP = sqrt((param->alpha2 / (pow(2, t/10)) * maxNumLevelLTP) / (param->StreamLength * (param->maxWeight - param->minWeight)));
+				double ProbConstLTD = sqrt((param->alpha2 / (pow(2, t/10)) * maxNumLevelLTD) / (param->StreamLength * (param->maxWeight - param->minWeight)));
+
+				int **pulse = new int *[param->nHide];
+				#pragma omp parallel for
+				for (int n = 0; n < param->nHide; n++) {
+					pulse[n] = new int[param->nOutput];
+				}
+
+				#pragma omp parallel for collapse(2)
+				for (int n = 0; n < param->nHide; n++) {
+					for (int m = 0; m < param->nOutput; m++) {
+						pulse[n][m] = 0;
+					}
+				}
+
+				/* original code */
+				bool **InputPulseTrain = new bool *[param->nHide];
+				//bool *InputisPositive = new bool [param->nHide];
+				bool InputisPositive[param->nHide] = {};
+				
+				/* Input is Positive? or not */
+				#pragma omp parallel for
+					for (int n = 0; n < param->nHide; n++) {
+						if (a1[n] > 0)
+							InputisPositive[n] = 1;
+					}
+				
+				/* generate Input pulse Train */
+				#pragma omp parallel for
+					for (int n = 0; n < param->nHide; n++) {
+						InputPulseTrain[n] = new bool [2 * param->StreamLength];
+
+						double iLTP = fabs(a1[n] * ProbConstLTP);
+						double iLTD = fabs(a1[n] * ProbConstLTD);
+						std::bernoulli_distribution disLTP(iLTP);
+						std::bernoulli_distribution disLTD(iLTD);
+						for (int t = 0; t < param->StreamLength; t++) {
+							InputPulseTrain[n][t] = disLTP(gen);
+							InputPulseTrain[n][t + param->StreamLength] = disLTD(gen);
+						}
+					}
+				
+				bool **DeltaPulseTrain = new bool *[param->nOutput];
+				//bool *DeltaisPositive = new bool [param->nOutput];
+				bool DeltaisPositive[param->nOutput] = {};
+
+				/* Delta is Positive? or not */
+				#pragma omp parallel for
+					for (int n = 0; n < param->nOutput; n++) {
+						if (s2[n] > 0)
+							DeltaisPositive[n] = 1;
+					}
+				
+				/* generate Delta pulse train */
+				#pragma omp parallel for
+					for (int n = 0; n < param->nOutput; n++) {
+						DeltaPulseTrain[n] = new bool [2 * param->StreamLength];
+
+						double dLTP = fabs(s2[n] * ProbConstLTP);
+						double dLTD = fabs(s2[n] * ProbConstLTD);
+						std::bernoulli_distribution disLTP(dLTP);
+						std::bernoulli_distribution disLTD(dLTD);
+						for (int t = 0; t < param->StreamLength; t++) {
+							DeltaPulseTrain[n][t] = disLTP(gen);
+							DeltaPulseTrain[n][t + param->StreamLength] = disLTD(gen);
+						}
+					}
+				
+				/* generate pulse for WU */
+				#pragma omp parallel for collapse(3)
+					for (int t = 0; t < param->StreamLength; t++) {
+						for (int n = 0; n < param->nHide; n++) {
+							for (int m = 0; m < param->nOutput; m++) {
+								if (InputisPositive[n] ^ DeltaisPositive[m]) { // for LTP : weight increase
+									if (InputPulseTrain[n][t] & DeltaPulseTrain[m][t])
+										pulse[n][m]++;
+								}
+								else { // for LTD : weight decrease
+									if (InputPulseTrain[n][t + param->StreamLength] & DeltaPulseTrain[m][t + param->StreamLength])
+										pulse[n][m]--;
+								}
+							}
+						}
+					}
+
+				#pragma omp parallel for
+					for (int n = 0; n < param->nHide; n++) 
+						delete[] InputPulseTrain[n];
+					delete[] InputPulseTrain;
+					//delete[] InputisPositive;
+				
+				#pragma omp parallel for
+					for (int n = 0; n < param->nOutput; n++)
+						delete[] DeltaPulseTrain[n];
+					delete[] DeltaPulseTrain;
+					//delete[] DeltaisPositive;
+
 				#pragma omp parallel for reduction(+: sumArrayWriteEnergy, sumNeuroSimWriteEnergy, sumWriteLatencyAnalogNVM)
 				for (int k = 0; k < param->nHide; k++) {
 					int numWriteOperationPerRow = 0;    // Number of write batches in a row that have any weight change
@@ -774,7 +846,12 @@ int train_batchsize = param -> numTrainImagesPerBatch;
                             }		
                         if(optimization_type == "SGD" || (batchSize+1) % train_batchsize == 0){
 							if (AnalogNVM *temp = dynamic_cast<AnalogNVM*>(arrayHO->cell[jj][k])) { // Analog eNVM
-                                arrayHO->WriteCell(jj, k, deltaWeight2[jj][k], weight2[jj][k], param->maxWeight, param->minWeight, true);
+                                // arrayHO->WriteCell(jj, k, deltaWeight2[jj][k], weight2[jj][k], param->maxWeight, param->minWeight, true);
+
+								//arrayHO->WirteCellWithNum(jj, k, pulse[k][jj], weight2[jj][k], param->maxWeight, param->minWeight);
+
+								arrayHO->WriteCelltest(jj, k, pulse[k][jj], weight2[jj][k], param->maxWeight, param->minWeight);
+
 							    weight2[jj][k] = arrayHO->ConductanceToWeight(jj, k, param->maxWeight, param->minWeight);
 								weightChangeBatch = weightChangeBatch || static_cast<AnalogNVM*>(arrayHO->cell[jj][k])->numPulse;
                                 if(fabs(static_cast<AnalogNVM*>(arrayIH->cell[jj][k])->numPulse) > maxPulseNum)
@@ -909,6 +986,12 @@ int train_batchsize = param -> numTrainImagesPerBatch;
 				subArrayHO->writeDynamicEnergy += sumNeuroSimWriteEnergy;
 				numWriteOperation = numWriteOperation / param->nHide;
 				subArrayHO->writeLatency += NeuroSimSubArrayWriteLatency(subArrayHO, numWriteOperation, sumWriteLatencyAnalogNVM);
+
+				#pragma omp parallel for
+					for (int n = 0; n < param->nHide; n++) {
+						delete[] pulse[n];
+					}
+					delete[] pulse;
 			} else {
 				#pragma omp parallel for
 				for (int j = 0; j < param->nOutput; j++) {

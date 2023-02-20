@@ -145,6 +145,9 @@ public:
 	double GetMinCellReadCurrent(int x, int y, char*mode=NULL);
 	double GetMediumCellReadCurrent(int x, int y);
 	double ConductanceToWeight(int x, int y, double maxWeight, double minWeight,char* mode=NULL);
+
+	void WirteCellWithNum(int x, int y, int numpulse, double weight, double maxWeight, double minWeight);
+	void WriteCelltest(int x, int y, int numpulse, double weight, double maxWeight, double minWeight);
 };
 
 #endif

@@ -438,6 +438,154 @@ void RealDevice::Write(double deltaWeightNormalized, double weight, double minWe
 	conductance = conductanceNew;
 }
 
+void RealDevice::WriteWithNum(int numpulse, double weight, double minWeight, double maxWeight) {
+	double conductanceNew = conductance;
+	if(numpulse > 0) { // LTP
+		paramBLTP = (maxConductance - minConductance) / (1 - exp(-maxNumLevelLTP / paramALTP));
+		xPulse = InvNonlinearWeight(conductance, maxNumLevelLTP, paramALTP, paramBLTP, minConductance);
+		conductanceNew = NonlinearWeight(xPulse + numpulse, maxNumLevelLTP, paramALTP, paramBLTP, minConductance);
+
+	}
+	else if (numpulse < 0) {
+		paramBLTD = (maxConductance - minConductance) / (1 - exp(-maxNumLevelLTD / paramALTD));
+		xPulse = InvNonlinearWeight(conductance, maxNumLevelLTD, paramALTD, paramBLTD, minConductance);
+		conductanceNew = NonlinearWeight(xPulse + numpulse, maxNumLevelLTD, paramALTD, paramBLTD, minConductance);
+	}
+
+
+	/* Cycle-to-cycle variation */
+	extern std::mt19937 gen;
+	if (sigmaCtoC && numpulse != 0)
+	{
+		conductanceNew += (*gaussian_dist3)(gen)*sqrt(abs(numpulse)); // Absolute variation
+	}
+
+	if (conductanceNew > maxConductance)
+	{
+		conductanceNew = maxConductance;
+	}
+	else if (conductanceNew < minConductance)
+	{
+		conductanceNew = minConductance;
+	}
+
+	/* Write latency calculation */
+	if (!nonIdenticalPulse)
+	{ // Identical write pulse scheme
+		if (numpulse > 0)
+		{ // LTP
+			writeLatencyLTP = numpulse * writePulseWidthLTP;
+			writeLatencyLTD = 0;
+		}
+		else
+		{ // LTD
+			writeLatencyLTP = 0;
+			writeLatencyLTD = -numpulse * writePulseWidthLTD;
+		}
+	}
+	else
+	{ // Non-identical write pulse scheme
+		writeLatencyLTP = 0;
+		writeLatencyLTD = 0;
+		writeVoltageSquareSum = 0;
+		double V = 0;
+		double PW = 0;
+		if (numpulse > 0)
+		{ // LTP
+			for (int i = 0; i < numpulse; i++)
+			{
+				V = VinitLTP + (xPulse + i) * VstepLTP;
+				PW = PWinitLTP + (xPulse + i) * PWstepLTP;
+				writeLatencyLTP += PW;
+				writeVoltageSquareSum += V * V;
+			}
+			writePulseWidthLTP = writeLatencyLTP / numpulse;
+		}
+		else
+		{ // LTD
+			for (int i = 0; i < (-numpulse); i++)
+			{
+				V = VinitLTD + (maxNumLevelLTD - xPulse + i) * VstepLTD;
+				PW = PWinitLTD + (maxNumLevelLTD - xPulse + i) * PWstepLTD;
+				writeLatencyLTD += PW;
+				writeVoltageSquareSum += V * V;
+			}
+			writePulseWidthLTD = writeLatencyLTD / (-numpulse);
+		}
+	}
+
+	conductancePrev = conductance;
+	conductance = conductanceNew;
+}
+void RealDevice::WriteWithNumtest(int numpulse, double weight, double minWeight, double maxWeight) {
+	double conductanceNew = conductance + numpulse * 0.0000000001;
+	printf("%d ", numpulse);
+
+	/* Cycle-to-cycle variation */
+	extern std::mt19937 gen;
+	if (sigmaCtoC && numpulse != 0)
+	{
+		conductanceNew += (*gaussian_dist3)(gen)*sqrt(abs(numpulse)); // Absolute variation
+	}
+
+	if (conductanceNew > maxConductance)
+	{
+		conductanceNew = maxConductance;
+	}
+	else if (conductanceNew < minConductance)
+	{
+		conductanceNew = minConductance;
+	}
+
+	/* Write latency calculation */
+	if (!nonIdenticalPulse)
+	{ // Identical write pulse scheme
+		if (numpulse > 0)
+		{ // LTP
+			writeLatencyLTP = numpulse * writePulseWidthLTP;
+			writeLatencyLTD = 0;
+		}
+		else
+		{ // LTD
+			writeLatencyLTP = 0;
+			writeLatencyLTD = -numpulse * writePulseWidthLTD;
+		}
+	}
+	else
+	{ // Non-identical write pulse scheme
+		writeLatencyLTP = 0;
+		writeLatencyLTD = 0;
+		writeVoltageSquareSum = 0;
+		double V = 0;
+		double PW = 0;
+		if (numpulse > 0)
+		{ // LTP
+			for (int i = 0; i < numpulse; i++)
+			{
+				V = VinitLTP + (xPulse + i) * VstepLTP;
+				PW = PWinitLTP + (xPulse + i) * PWstepLTP;
+				writeLatencyLTP += PW;
+				writeVoltageSquareSum += V * V;
+			}
+			writePulseWidthLTP = writeLatencyLTP / numpulse;
+		}
+		else
+		{ // LTD
+			for (int i = 0; i < (-numpulse); i++)
+			{
+				V = VinitLTD + (maxNumLevelLTD - xPulse + i) * VstepLTD;
+				PW = PWinitLTD + (maxNumLevelLTD - xPulse + i) * PWstepLTD;
+				writeLatencyLTD += PW;
+				writeVoltageSquareSum += V * V;
+			}
+			writePulseWidthLTD = writeLatencyLTD / (-numpulse);
+		}
+	}
+
+	conductancePrev = conductance;
+	conductance = conductanceNew;
+}
+
 /* Measured device */
 MeasuredDevice::MeasuredDevice(int x, int y) {
 	this->x = x; this->y = y;	// Cell location: x (column) and y (row) start from index 0

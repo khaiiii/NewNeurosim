@@ -133,6 +133,10 @@ public:
 
 	virtual double Read(double voltage) = 0;
 	virtual void Write(double deltaWeightNormalized, double weight, double minWeight, double maxWeight) = 0;
+
+	virtual void WriteWithNum(int numpulse, double weight, double minWeight, double maxWeight) = 0;
+	virtual void WriteWithNumtest(int numpulse, double weight, double minWeight, double maxWeight) = 0;
+
 	double GetMaxReadCurrent(){
       if(cmosAccess && !FeFET)
           return readVoltage * 1/(1/avgMaxConductance+resistanceAccess);
@@ -182,6 +186,9 @@ public:
 	RealDevice(int x, int y);
 	double Read(double voltage);	// Return read current (A)
 	void Write(double deltaWeightNormalized, double weight, double minWeight, double maxWeight);
+	
+	void WriteWithNum(int numpulse, double weight, double minWeight, double maxWeight);
+	void WriteWithNumtest(int numpulse, double weight, double minWeight, double maxWeight);
 };
 
 class MeasuredDevice: public AnalogNVM {

@@ -243,6 +243,14 @@ void Array::WriteCell(int x, int y, double deltaWeight, double weight, double ma
 	}
 }
 
+void Array::WirteCellWithNum(int x, int y, int numpulse, double weight, double maxWeight, double minWeight) {
+	static_cast<AnalogNVM*>(cell[x][y])->WriteWithNum(numpulse, weight, minWeight, maxWeight);
+}
+
+void Array::WriteCelltest(int x, int y, int numpulse, double weight, double maxWeight, double minWeight) {
+	static_cast<AnalogNVM*>(cell[x][y])->WriteWithNumtest(numpulse, weight, minWeight, maxWeight);
+}
+
 double Array::GetMaxCellReadCurrent(int x, int y, char* mode) { 
     // two mode: "LSB", "MSB". For hybrid cell only
     if(AnalogNVM*temp = dynamic_cast<AnalogNVM*>(**cell)) 
